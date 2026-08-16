@@ -52,7 +52,7 @@ It follows a strict **zero-footprint** architecture: all DICOM parsing, image de
 
 ## 📁 Project Structure
 
-```
+```text
 ├── app/
 │   ├── layout.tsx             # Root application layout
 │   ├── page.tsx               # Primary DICOM viewer & viewport orchestration
@@ -81,23 +81,14 @@ It follows a strict **zero-footprint** architecture: all DICOM parsing, image de
 
 ### Installation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/<your-username>/<repo-name>.git
-   cd <repo-name>
-   ```
+```bash
+git clone [https://github.com/jaaniin/DICOM-Image-Viewer.git](https://github.com/jaaniin/DICOM-Image-Viewer.git)
+cd DICOM-Image-Viewer
+npm install
+npm run dev
+```
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Building for Production
 
