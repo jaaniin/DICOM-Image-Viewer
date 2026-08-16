@@ -1,0 +1,8 @@
+{
+  "name": "DICOM Image Viewer",
+  "description": "A web-based DICOM-image viewer with diagnostic tools and reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
