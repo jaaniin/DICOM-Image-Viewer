@@ -118,9 +118,9 @@ npm run start
 
 ---
 
-## ⚠️ Disclaimer
+## ⚠️ Medical Disclaimer
 
-This software is developed for **educational, research, and demonstration purposes only**. It is **not** a certified medical device and must **not** be used as a primary diagnostic tool for clinical patient care or medical decision-making.
+This software is developed for **educational, research, and demonstration purposes only**. It is **not** a certified medical device and must **not** be used for clinical diagnosis, patient care, or medical decision-making.
 
 ---
 
