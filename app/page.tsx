@@ -163,6 +163,8 @@ export default function App() {
   const [isReportCopied, setIsReportCopied] = useState(false);
   const viewportRefs = useRef<(HTMLDivElement | null)[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wheelTimeRef = useRef<number>(0);
+  const wheelStreakRef = useRef<number>(0);
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
@@ -629,8 +631,11 @@ export default function App() {
                 if (p.y > maxY) maxY = p.y;
              });
              
-             let mean = 0;
+             let sum = 0;
+             let sumSq = 0;
              let count = 0;
+             let minVal = Infinity;
+             let maxVal = -Infinity;
              try {
                const pixelData = enabledElement.image!.getPixelData();
                const width = enabledElement.image!.width;
@@ -653,19 +658,26 @@ export default function App() {
                       let val = pixelData[y * width + x];
                       if (enabledElement.image!.slope) val = val * enabledElement.image!.slope;
                       if (enabledElement.image!.intercept) val = val + enabledElement.image!.intercept;
-                      mean += val;
+                      sum += val;
+                      sumSq += val * val;
+                      if (val < minVal) minVal = val;
+                      if (val > maxVal) maxVal = val;
                       count++;
                    }
                  }
                }
-               if (count > 0) mean = mean / count;
+               if (count > 0) {
+                 const mean = sum / count;
+                 const variance = (sumSq - (sum * sum / count)) / count;
+                 m.mean = Math.round(mean);
+                 m.stdDev = Math.sqrt(Math.max(0, variance));
+                 m.min = Math.round(minVal);
+                 m.max = Math.round(maxVal);
+                 m.area = area;
+               }
              } catch(err) {}
              
-             if (count > 0) {
-               m.mean = Math.round(mean);
-             }
-             
-             lengthText = `ROI ${label}: ${area.toFixed(1)} ${(pixelSpacing && pixelSpacing.length === 2) ? 'mm²' : 'px²'} (mean ${Math.round(mean)}${modality === 'CT' ? ' HU' : ''})`;
+             lengthText = `ROI ${label}: ${area.toFixed(1)} ${(pixelSpacing && pixelSpacing.length === 2) ? 'mm²' : 'px²'} (mean ${m.mean !== undefined ? m.mean : '--'}${modality === 'CT' ? ' HU' : ''})`;
           }
           
           ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -1547,11 +1559,40 @@ export default function App() {
     const series = study?.series.find(s => s.seriesInstanceUID === vp.seriesInstanceUID);
     if (!series || series.instances.length <= 1) return;
 
+    const now = performance.now();
+    const timeSinceLastWheel = now - wheelTimeRef.current;
+    wheelTimeRef.current = now;
+
+    let step = 1;
+    
+    // Smooth scrolling devices often have small deltaY but very frequent events.
+    // Notched mice have fixed deltaY (e.g. 100) and frequency depends on scroll speed.
+    if (timeSinceLastWheel < 40) {
+       wheelStreakRef.current += 1;
+    } else {
+       wheelStreakRef.current = 0;
+    }
+
+    // Base step on scroll streak
+    if (wheelStreakRef.current > 15) {
+      step = 15;
+    } else if (wheelStreakRef.current > 8) {
+      step = 10;
+    } else if (wheelStreakRef.current > 3) {
+      step = 5;
+    }
+
+    // Additional multiplier for very large single-event deltaY (aggressive trackpad swipes)
+    if (Math.abs(e.deltaY) > 150) {
+       step = Math.max(step, Math.floor(Math.abs(e.deltaY) / 100) * 3);
+       step = Math.min(step, 20); // Cap max skip
+    }
+
     let newIndex = vp.imageIndex;
     if (e.deltaY > 0) {
-      newIndex = Math.min(newIndex + 1, series.instances.length - 1); // Scroll down -> next image
+      newIndex = Math.min(newIndex + step, series.instances.length - 1); // Scroll down -> next image
     } else {
-      newIndex = Math.max(newIndex - 1, 0); // Scroll up -> previous image
+      newIndex = Math.max(newIndex - step, 0); // Scroll up -> previous image
     }
 
     if (newIndex !== vp.imageIndex) {
@@ -2094,30 +2135,30 @@ export default function App() {
                 <AlertCircle className="w-5 h-5 text-amber-500" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Potilas-ID ei täsmää</h2>
-                <p className="text-sm text-neutral-400">Uusien kuvien Patient ID eroaa aiemmin ladatuista.</p>
+                <h2 className="text-lg font-bold text-white">Patient ID Mismatch</h2>
+                <p className="text-sm text-neutral-400">The new images have a different Patient ID than the currently loaded images.</p>
               </div>
             </div>
             <div className="p-5 flex flex-col gap-3">
               <button
-                onClick={() => handleConfirmMismatchDialog(false)}
-                className="w-full px-4 py-3 bg-neutral-800 hover:bg-neutral-700 text-white font-medium rounded-lg transition-colors flex items-center justify-between"
-              >
-                <span>Lisää kuvat vaikka ID:t poikkeavat</span>
-                <ChevronRight className="w-4 h-4 text-neutral-500" />
-              </button>
-              <button
                 onClick={() => handleConfirmMismatchDialog(true)}
                 className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg shadow transition-colors flex items-center justify-between"
               >
-                <span>Poista aiemmat ja lisää uudet kuvat</span>
+                <span>Replace Images</span>
                 <ChevronRight className="w-4 h-4 text-blue-200" />
+              </button>
+              <button
+                onClick={() => handleConfirmMismatchDialog(false)}
+                className="w-full px-4 py-3 bg-neutral-800 hover:bg-neutral-700 text-white font-medium rounded-lg transition-colors flex items-center justify-between"
+              >
+                <span>Append Anyway</span>
+                <ChevronRight className="w-4 h-4 text-neutral-500" />
               </button>
               <button
                 onClick={() => setPatientMismatchDialog({ show: false, pendingInstances: [] })}
                 className="w-full px-4 py-3 bg-transparent hover:bg-neutral-800 border border-neutral-700 text-neutral-300 font-medium rounded-lg transition-colors flex items-center justify-center mt-2"
               >
-                Peru
+                Cancel
               </button>
             </div>
           </div>
@@ -2241,7 +2282,7 @@ export default function App() {
               </button>
               
               {isTrashOpen && (
-                <div className="absolute top-full left-0 mt-2 bg-neutral-800 border border-neutral-700 p-3 rounded-md shadow-2xl w-64 z-50">
+                <div className="absolute top-full left-0 mt-2 bg-neutral-800 border border-neutral-700 p-3 rounded-md shadow-2xl w-[340px] z-50">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Measurements</h4>
                     <span className="text-[10px] text-neutral-500">({measurements.length})</span>
@@ -2250,22 +2291,60 @@ export default function App() {
                     <div className="text-xs text-neutral-500 italic mb-3">No measurements</div>
                   ) : (
                     <div className="flex flex-col gap-2 max-h-56 overflow-y-auto mb-3">
-                      {measurements.map((m, idx) => (
-                        <label key={m.id} className="flex items-center gap-2 text-sm text-neutral-200 cursor-pointer hover:bg-neutral-700 p-1.5 rounded transition-colors">
-                          <input 
-                            type="checkbox" 
-                            checked={selectedForDeletion.has(m.id)}
-                            onChange={(e) => {
-                              const newSet = new Set(selectedForDeletion);
-                              if (e.target.checked) newSet.add(m.id);
-                              else newSet.delete(m.id);
-                              setSelectedForDeletion(newSet);
-                            }}
-                            className="rounded bg-neutral-900 border-neutral-700 text-red-500 focus:ring-red-500"
-                          />
-                          <span className="truncate text-xs font-mono">{calculateMeasurementLengthText(m, idx, studies)}</span>
-                        </label>
-                      ))}
+                      {measurements.map((m, idx) => {
+                        const isRoi = m.type === 'roi';
+                        return (
+                        <div key={m.id} className="flex flex-col bg-neutral-900/50 border border-neutral-700/50 rounded overflow-hidden">
+                          <div className="flex items-center gap-2 text-sm text-neutral-200 hover:bg-neutral-700 p-1.5 transition-colors cursor-pointer" onClick={(e) => {
+                            if ((e.target as HTMLElement).tagName === 'INPUT') return;
+                            if (isRoi) setMeasurements(prev => prev.map(old => old.id === m.id ? {...old, isExpanded: !old.isExpanded} : old));
+                          }}>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedForDeletion.has(m.id)}
+                              onChange={(e) => {
+                                const newSet = new Set(selectedForDeletion);
+                                if (e.target.checked) newSet.add(m.id);
+                                else newSet.delete(m.id);
+                                setSelectedForDeletion(newSet);
+                              }}
+                              className="rounded bg-neutral-900 border-neutral-700 text-red-500 focus:ring-red-500"
+                            />
+                            <span className="truncate text-xs font-mono flex-1">{calculateMeasurementLengthText(m, idx, studies)}</span>
+                            {isRoi && (
+                              <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform ${m.isExpanded ? 'rotate-90' : ''}`} />
+                            )}
+                          </div>
+                          {isRoi && m.isExpanded && (
+                            <div className="p-2 bg-neutral-950 text-xs font-mono text-neutral-400 grid grid-cols-2 gap-y-1 gap-x-2 border-t border-neutral-800">
+                              <div>Area:</div>
+                              <div className="text-right text-neutral-200">
+                                {m.area !== undefined ? m.area.toFixed(2) : '--'}
+                              </div>
+                              
+                              <div>Mean:</div>
+                              <div className="text-right text-neutral-200">
+                                {m.mean !== undefined ? m.mean.toFixed(1) : '--'}
+                              </div>
+                              
+                              <div>Std Dev:</div>
+                              <div className="text-right text-neutral-200">
+                                {m.stdDev !== undefined ? m.stdDev.toFixed(1) : '--'}
+                              </div>
+                              
+                              <div>Min:</div>
+                              <div className="text-right text-neutral-200">
+                                {m.min !== undefined ? m.min : '--'}
+                              </div>
+                              
+                              <div>Max:</div>
+                              <div className="text-right text-neutral-200">
+                                {m.max !== undefined ? m.max : '--'}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )})}
                     </div>
                   )}
                   <button
@@ -2283,7 +2362,7 @@ export default function App() {
                     disabled={selectedForDeletion.size === 0}
                     className="w-full py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-neutral-700 disabled:text-neutral-500 text-white text-xs font-medium rounded transition-colors"
                   >
-                    Poista valitut {selectedForDeletion.size > 0 ? `(${selectedForDeletion.size})` : ''}
+                    Delete selected {selectedForDeletion.size > 0 ? `(${selectedForDeletion.size})` : ''}
                   </button>
                 </div>
               )}

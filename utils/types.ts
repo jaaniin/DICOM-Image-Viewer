@@ -62,6 +62,11 @@ export type LengthMeasurement = {
   points?: Point[];
   isClosed?: boolean;
   mean?: number;
+  area?: number;
+  stdDev?: number;
+  min?: number;
+  max?: number;
+  isExpanded?: boolean;
   start: Point;
   end: Point;
   start2?: Point;
