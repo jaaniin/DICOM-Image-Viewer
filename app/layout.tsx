@@ -2,17 +2,17 @@ import type {Metadata} from 'next';
 import './globals.css'; // Global styles
 
 export const metadata: Metadata = {
-  title: 'DICOM Image Viewer',
-  description: 'Zero-Footprint DICOM Image Viewer',
+  title: 'div.DICOM | Zero-Footprint Viewer',
+  description: 'A modern, zero-footprint web-based DICOM viewer.',
   openGraph: {
-    title: 'DICOM Image Viewer',
-    description: 'Zero-Footprint DICOM Image Viewer',
+    title: 'div.DICOM | Zero-Footprint Viewer',
+    description: 'A modern, zero-footprint web-based DICOM viewer.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'DICOM Image Viewer',
-    description: 'Zero-Footprint DICOM Image Viewer',
+    title: 'div.DICOM | Zero-Footprint Viewer',
+    description: 'A modern, zero-footprint web-based DICOM viewer.',
   },
 };
 

@@ -1,6 +1,6 @@
 {
-  "name": "dicom-image-viewer",
-  "version": "0.1.0",
+  "name": "div.dicom",
+  "version": "0.7.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",

@@ -1,5 +1,5 @@
 {
-  "name": "DICOM Image Viewer",
+  "name": "div.DICOM",
   "description": "A web-based DICOM-image viewer with diagnostic tools and reporting.",
   "requestFramePermissions": [],
   "majorCapabilities": [

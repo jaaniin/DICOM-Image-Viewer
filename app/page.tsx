@@ -27,12 +27,18 @@ import { Trash2,
   AlertCircle,
   ChevronRight,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Github,
+  HelpCircle,
+  ListCollapse
 } from 'lucide-react';
 import { Tool, Layout, Tab, DICOMMetadata, DICOMInstance, DICOMSeries, Point, LengthMeasurement, DICOMStudy, ViewportState } from "../utils/types";
 import { dot, cross, sub, add, mul, getDominantAxis, getOppositeAxis, getOrientationMarkers, calculateIntersection, crossProduct, dotProduct, subVectors, addVectors, scaleVector, getNormal } from "../utils/dicomGeometry";
-import { AngleIcon, RoiIcon, MeasurementListIcon } from "../components/Icons";
+import { AngleIcon, RoiIcon } from "../components/Icons";
 import { generateReportText, generateReportFilename, downloadReportFile } from "../utils/reportGenerator";
+import packageJson from "../package.json";
+
+const currentVersion = packageJson.version || "0.7.0";
 
 const readAllEntries = async (dirReader: FileSystemDirectoryReader): Promise<any[]> => {
   let allEntries: any[] = [];
@@ -134,6 +140,8 @@ const formatNumber = (numStr?: string | number, decimals: number = 3) => {
 export default function App() {
   const [isParsing, setIsParsing] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState<{version: string, url: string} | null>(null);
   const [isDisclaimerChecked, setIsDisclaimerChecked] = useState(false);
   const [activeTool, setActiveTool] = useState<Tool>('wwc');
   const [layout, setLayout] = useState<Layout>(1);
@@ -173,6 +181,33 @@ export default function App() {
   const [showGlobalOverlay, setShowGlobalOverlay] = useState(false);
   const [overlayHoverZone, setOverlayHoverZone] = useState<'none' | 'left' | 'right' | 'single'>('none');
 
+  const toggleSidebar = async () => {
+    const willOpen = !isSidebarOpen;
+    setIsSidebarOpen(willOpen);
+    
+    if (typeof document !== 'undefined' && document.fullscreenEnabled) {
+      if (!willOpen) {
+        if (!document.fullscreenElement) {
+          try { await document.documentElement.requestFullscreen(); } catch (e) {}
+        }
+      } else {
+        if (document.fullscreenElement) {
+          try { await document.exitFullscreen(); } catch (e) {}
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && !isSidebarOpen) {
+        setIsSidebarOpen(true);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [isSidebarOpen]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -184,6 +219,38 @@ export default function App() {
       setIsDisclaimerChecked(true);
     }, 0);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const res = await fetch('https://api.github.com/repos/jaaniin/div.DICOM/releases/latest');
+        if (res.ok) {
+          const data = await res.json();
+          const latestVersion = data.tag_name.replace(/^v/, '');
+          
+          const currentParts = currentVersion.split('.').map(Number);
+          const latestParts = latestVersion.split('.').map(Number);
+          
+          let isNewer = false;
+          for (let i = 0; i < 3; i++) {
+            if ((latestParts[i] || 0) > (currentParts[i] || 0)) {
+              isNewer = true;
+              break;
+            } else if ((latestParts[i] || 0) < (currentParts[i] || 0)) {
+              break;
+            }
+          }
+          
+          if (isNewer) {
+            setUpdateAvailable({ version: data.tag_name, url: data.html_url });
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to check for updates");
+      }
+    };
+    checkUpdate();
   }, []);
 
   const handleRemoveSeries = (e: React.MouseEvent, studyUID: string, seriesUID: string) => {
@@ -1677,7 +1744,6 @@ export default function App() {
 
       if (e.key === 'Escape') {
         setActiveTool('none');
-        setIsSidebarOpen(false);
       }
 
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp') {
@@ -2393,8 +2459,111 @@ export default function App() {
       {isParsing && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-neutral-950/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+            <Loader2 className="w-10 h-10 text-[#3584F5] animate-spin" />
             <div className="text-lg font-medium text-neutral-200">Parsing DICOM files...</div>
+          </div>
+        </div>
+      )}
+
+      {/* Help Modal */}
+      {isHelpModalOpen && (
+        <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setIsHelpModalOpen(false)}>
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#3584F5]/20 flex items-center justify-center shrink-0">
+                  <HelpCircle className="w-5 h-5 text-[#3584F5]" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Help & Shortcuts</h2>
+                  <p className="text-sm text-neutral-400">Quick reference guide</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsHelpModalOpen(false)}
+                className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[60vh] text-sm text-neutral-300 space-y-6">
+              <div>
+                <h3 className="font-semibold text-[#3584F5] uppercase tracking-wider text-xs mb-3 border-b border-neutral-800 pb-2">About</h3>
+                <div className="flex items-center justify-between bg-neutral-950/50 p-4 rounded-lg border border-neutral-800/50">
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold tracking-wide flex items-baseline select-none">
+                      <span className="text-neutral-500 font-mono tracking-tighter text-lg">&lt;&nbsp;</span>
+                      <span className="text-[#3584F5] font-mono text-lg">div.</span>
+                      <span className="text-white text-xl ml-0.5">DICOM</span>
+                      <span className="text-neutral-500 font-mono tracking-tighter ml-0.5 text-lg">&nbsp;/&gt;</span>
+                    </span>
+                    <span className="text-neutral-400 font-medium">v{currentVersion}</span>
+                  </div>
+                  <a href="https://github.com/jaaniin/div.DICOM/releases" target="_blank" rel="noopener noreferrer" className="text-sm text-[#3584F5] hover:text-[#3584F5] transition-colors">Release Notes</a>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-[#3584F5] uppercase tracking-wider text-xs mb-3 border-b border-neutral-800 pb-2">Mouse Controls</h3>
+                <div className="grid grid-cols-2 gap-y-2 text-sm">
+                  <div className="text-neutral-400">Left Click & Drag</div><div className="font-medium text-white">Use Active Tool</div>
+                  <div className="text-neutral-400">Middle Click & Drag</div><div className="font-medium text-white">Pan Image</div>
+                  <div className="text-neutral-400">Right Click & Drag</div><div className="font-medium text-white">Adjust Window / Level</div>
+                  <div className="text-neutral-400">Left + Right Click & Drag</div><div className="font-medium text-white">Zoom In / Out</div>
+                  <div className="text-neutral-400">Scroll Wheel</div><div className="font-medium text-white">Change Slice</div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-[#3584F5] uppercase tracking-wider text-xs mb-3 border-b border-neutral-800 pb-2">Keyboard Shortcuts</h3>
+                <div className="grid grid-cols-2 gap-y-2 text-sm">
+                  <div className="text-neutral-400">Esc</div><div className="font-medium text-white">Drop active tool / Exit Zen Mode</div>
+                  <div className="text-neutral-400">F11</div><div className="font-medium text-white">Browser Native Fullscreen</div>
+                  <div className="text-neutral-400">Arrow Up / Down</div><div className="font-medium text-white">Next / Previous Slice</div>
+                  <div className="text-neutral-400">Page Up / Down</div><div className="font-medium text-white">Skip 5 Slices</div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-amber-400 uppercase tracking-wider text-xs mb-3 border-b border-neutral-800 pb-2">Medical Disclaimer</h3>
+                <p className="text-neutral-400 text-sm leading-relaxed mb-2">
+                  This software is intended for <strong>educational, research, and informational purposes only</strong>. It is <strong>NOT</strong> an FDA-approved or CE-marked medical device.
+                </p>
+                <p className="text-neutral-400 text-sm leading-relaxed mb-4">
+                  Do not use this software for clinical diagnosis, patient care, or primary image interpretation. The display quality, image scaling, and measurements provided by this tool have not been clinically validated.
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-neutral-800 bg-neutral-950 flex justify-between items-center gap-3">
+              <div className="flex gap-2">
+                <a 
+                  href="https://github.com/jaaniin/div.DICOM" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 text-sm font-medium text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <Github className="w-4 h-4" />
+                  View on GitHub
+                </a>
+                <a 
+                  href="https://github.com/jaaniin/div.DICOM/issues" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 text-sm font-medium text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  Report an Issue
+                </a>
+              </div>
+              <button 
+                onClick={() => setIsHelpModalOpen(false)}
+                className="px-6 py-2 bg-[#3584F5] hover:bg-[#3584F5] text-white font-medium rounded-lg shadow-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2405,6 +2574,24 @@ export default function App() {
         {/* Toolbar */}
         <div className="h-14 flex items-center justify-between px-4 bg-neutral-900 border-b border-neutral-800 flex-shrink-0 relative z-40">
           <div className="flex items-center gap-2">
+            <span className="font-bold tracking-wide mr-4 flex items-baseline select-none">
+              <span className="text-neutral-500 font-mono tracking-tighter text-sm">&lt;&nbsp;</span>
+              <span className="text-[#3584F5] font-mono text-sm">div.</span>
+              <span className="text-white text-base ml-0.5">DICOM</span>
+              <span className="text-neutral-500 font-mono tracking-tighter ml-0.5 text-sm">&nbsp;/&gt;</span>
+            </span>
+            {updateAvailable && (
+              <a 
+                href={updateAvailable.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mr-2 px-2 py-0.5 bg-[#3584F5]/20 text-[#3584F5] text-[10px] font-bold uppercase tracking-wider rounded border border-[#3584F5]/30 hover:bg-[#3584F5]/30 transition-colors flex items-center gap-1"
+                title="New version available!"
+              >
+                Update: {updateAvailable.version}
+              </a>
+            )}
+            <div className="w-px h-6 bg-neutral-700 mx-1" />
             {tools.map((tool) => {
               const Icon = tool.icon;
               const isActive = activeTool === tool.id;
@@ -2448,7 +2635,7 @@ export default function App() {
                 {draggingPoint ? (
                   <Trash2 className={`w-5 h-5 transition-transform ${isDraggingOverTrash ? '-translate-y-0.5 scale-110 text-white' : 'text-neutral-300'}`} />
                 ) : (
-                  <MeasurementListIcon className="w-5 h-5" />
+                  <ListCollapse className="w-5 h-5" />
                 )}
                 
                 <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1.5 bg-neutral-800 text-neutral-200 text-xs rounded-md shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 delay-0 group-hover:delay-500 whitespace-nowrap z-50 pointer-events-none border border-neutral-700/50 flex flex-col items-center leading-tight">
@@ -2593,9 +2780,17 @@ export default function App() {
             </button>
             <div className="w-px h-6 bg-neutral-700 mx-1" />
             <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              onClick={() => setIsHelpModalOpen(true)}
+              className="p-2 rounded-md transition-colors text-neutral-400 hover:bg-neutral-800 hover:text-white"
+              title="Help & Shortcuts"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
+            <div className="w-px h-6 bg-neutral-700 mx-1" />
+            <button
+              onClick={toggleSidebar}
               className={`p-2 rounded-md transition-colors ${!isSidebarOpen ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
-              title={isSidebarOpen ? "Close Sidebar" : "Open Sidebar"}
+              title={isSidebarOpen ? "Close Sidebar (Zen Mode)" : "Open Sidebar"}
             >
               {isSidebarOpen ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
             </button>

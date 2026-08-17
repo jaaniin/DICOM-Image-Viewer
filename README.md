@@ -1,4 +1,4 @@
-# Zero-Footprint DICOM Image Viewer
+# div.DICOM | Zero-Footprint Viewer
 
 A modern, high-performance, web-based DICOM medical image viewer built with **Next.js (App Router)**, **TypeScript**, **Cornerstone.js**, and **Tailwind CSS**.
 
@@ -81,8 +81,8 @@ It follows a strict **zero-footprint** architecture: all DICOM parsing, image de
 ### Installation
 
 ```bash
-git clone https://github.com/jaaniin/DICOM-Image-Viewer.git
-cd DICOM-Image-Viewer
+git clone https://github.com/jaaniin/div.DICOM.git
+cd div.DICOM
 npm install
 npm run dev
 ```
