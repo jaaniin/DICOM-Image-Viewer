@@ -185,6 +185,14 @@ export default function App() {
   const handleRemoveSeries = (e: React.MouseEvent, studyUID: string, seriesUID: string) => {
     e.stopPropagation();
     
+    // Find imageIds to remove associated measurements
+    const studyToRemoveFrom = studies.find(s => s.studyInstanceUID === studyUID);
+    const seriesToRemove = studyToRemoveFrom?.series.find(s => s.seriesInstanceUID === seriesUID);
+    if (seriesToRemove) {
+      const removedImageIds = new Set(seriesToRemove.instances.map(inst => inst.imageId));
+      setMeasurements(prev => prev.filter(m => !removedImageIds.has(m.imageId)));
+    }
+
     // Remove from loaded studies
     setStudies(prevStudies => {
       const newStudies = prevStudies.map(study => {
@@ -2000,6 +2008,7 @@ export default function App() {
         setTimeout(() => {
            if (clearPrevious) {
                clearAllViewports();
+               setMeasurements([]);
            }
            setLayout(newLayout);
            setViewports(prev => {
