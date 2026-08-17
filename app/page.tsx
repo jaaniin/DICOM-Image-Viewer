@@ -25,7 +25,9 @@ import { Trash2,
   PanelRightOpen,
   Crosshair,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Plus,
+  RefreshCw
 } from 'lucide-react';
 import { Tool, Layout, Tab, DICOMMetadata, DICOMInstance, DICOMSeries, Point, LengthMeasurement, DICOMStudy, ViewportState } from "../utils/types";
 import { dot, cross, sub, add, mul, getDominantAxis, getOppositeAxis, getOrientationMarkers, calculateIntersection, crossProduct, dotProduct, subVectors, addVectors, scaleVector, getNormal } from "../utils/dicomGeometry";
@@ -168,6 +170,8 @@ export default function App() {
   const wheelTimeRef = useRef<number>(0);
   const wheelStreakRef = useRef<number>(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [showGlobalOverlay, setShowGlobalOverlay] = useState(false);
+  const [overlayHoverZone, setOverlayHoverZone] = useState<'none' | 'left' | 'right' | 'single'>('none');
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1671,6 +1675,11 @@ export default function App() {
         }
       }
 
+      if (e.key === 'Escape') {
+        setActiveTool('none');
+        setIsSidebarOpen(false);
+      }
+
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp') {
         const targetVpIndex = maximizedIndex !== null ? maximizedIndex : (activeViewportIndex !== null ? activeViewportIndex : 0);
         if (targetVpIndex === null || targetVpIndex < 0 || targetVpIndex >= viewports.length) return;
@@ -1823,12 +1832,9 @@ export default function App() {
     setIsDragging(false);
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    
-    if (e.dataTransfer.items) {
-      const items = Array.from(e.dataTransfer.items);
+  const processDataTransfer = async (dataTransfer: DataTransfer, isReplace: boolean = false) => {
+    if (dataTransfer.items) {
+      const items = Array.from(dataTransfer.items);
       const filePromises = items.map(item => {
         const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
         if (entry) {
@@ -1844,11 +1850,18 @@ export default function App() {
       const allFiles = filesArrays.flat().filter(f => f.name !== '.DS_Store' && !f.name.startsWith('._'));
       
       if (allFiles.length > 0) {
-        handleFiles(allFiles);
+        handleFiles(allFiles, isReplace);
       }
-    } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFiles(Array.from(e.dataTransfer.files));
+    } else if (dataTransfer.files && dataTransfer.files.length > 0) {
+      handleFiles(Array.from(dataTransfer.files), isReplace);
     }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    processDataTransfer(e.dataTransfer);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2009,6 +2022,8 @@ export default function App() {
            if (clearPrevious) {
                clearAllViewports();
                setMeasurements([]);
+               setActiveTool('none');
+               setIsSidebarOpen(false);
            }
            setLayout(newLayout);
            setViewports(prev => {
@@ -2036,7 +2051,7 @@ export default function App() {
     });
   };
 
-  const handleFiles = async (files: File[]) => {
+  const handleFiles = async (files: File[], isReplace: boolean = false) => {
     if (files.length === 0) return;
 
     setIsParsing(true);
@@ -2107,14 +2122,17 @@ export default function App() {
         }
       }
 
-      if (mismatch) {
-        setIsParsing(false);
-        setPatientMismatchDialog({ show: true, pendingInstances: validInstances });
-        return;
+      if (isReplace) {
+        applyValidInstances(validInstances, true);
+      } else {
+        if (mismatch) {
+          setIsParsing(false);
+          setPatientMismatchDialog({ show: true, pendingInstances: validInstances });
+          return;
+        }
+        applyValidInstances(validInstances, false);
       }
-
-      applyValidInstances(validInstances, false);
-
+      
       } catch (err) {
         console.error("Error processing batch via worker:", err);
       } finally {
@@ -2143,14 +2161,86 @@ export default function App() {
     setViewports(prev => prev.map(vp => ({ ...vp, seriesInstanceUID: null, studyInstanceUID: null, currentImageIndex: 0 })));
     setLayout(1);
     setMeasurements([]);
+    setActiveTool('none');
+    setIsSidebarOpen(false);
     if (cursor3DRef.current) cursor3DRef.current = null;
     setCursor3DActive(false);
     setShowRemoveAllDialog(false);
   };
 
+  const handleRootDragEnter = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      setShowGlobalOverlay(true);
+    }
+  };
+
   return (
-    <div className="flex h-screen bg-neutral-950 text-neutral-300 font-sans overflow-hidden select-none">
+    <div 
+      className="flex h-screen bg-neutral-950 text-neutral-300 font-sans overflow-hidden select-none"
+      onDragEnter={handleRootDragEnter}
+    >
       
+      {/* Global Drag Overlay */}
+      {showGlobalOverlay && (
+        <div
+          className="fixed inset-0 z-[100] flex"
+          onDragLeave={(e) => {
+            if (!e.relatedTarget || (e.relatedTarget as Element).nodeName === 'HTML') {
+              setShowGlobalOverlay(false);
+              setOverlayHoverZone('none');
+            }
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (studies.length === 0) {
+              setOverlayHoverZone('single');
+            } else {
+              const rect = e.currentTarget.getBoundingClientRect();
+              if (e.clientX < rect.width / 2) {
+                setOverlayHoverZone('left');
+              } else {
+                setOverlayHoverZone('right');
+              }
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setShowGlobalOverlay(false);
+            const isReplace = studies.length > 0 && overlayHoverZone === 'right';
+            setOverlayHoverZone('none');
+            processDataTransfer(e.dataTransfer, isReplace);
+          }}
+        >
+          {studies.length === 0 ? (
+            <div className={`flex-1 flex flex-col items-center justify-center bg-blue-900/40 backdrop-blur-sm border-4 border-dashed transition-colors ${overlayHoverZone === 'single' ? 'border-blue-400' : 'border-blue-500/50'}`}>
+              <div className="pointer-events-none text-center">
+                <UploadCloud className="w-20 h-20 text-blue-400 mx-auto mb-4" />
+                <h2 className="text-3xl font-bold text-white mb-2">Drop images here</h2>
+                <p className="text-blue-200">Load DICOM files or folders</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className={`flex-1 flex flex-col items-center justify-center backdrop-blur-sm border-4 border-dashed transition-colors ${overlayHoverZone === 'left' ? 'bg-blue-900/60 border-blue-400' : 'bg-blue-950/40 border-blue-500/30'} border-r-0`}>
+                <div className="pointer-events-none text-center">
+                  <Plus className="w-20 h-20 text-blue-400 mx-auto mb-4" />
+                  <h2 className="text-3xl font-bold text-white mb-2">ADD IMAGES</h2>
+                  <p className="text-blue-200">Keep current studies and append new ones</p>
+                </div>
+              </div>
+              <div className={`flex-1 flex flex-col items-center justify-center backdrop-blur-sm border-4 border-dashed transition-colors ${overlayHoverZone === 'right' ? 'bg-orange-900/60 border-orange-400' : 'bg-orange-950/40 border-orange-500/30'} border-l-0`}>
+                <div className="pointer-events-none text-center">
+                  <RefreshCw className="w-20 h-20 text-orange-400 mx-auto mb-4" />
+                  <h2 className="text-3xl font-bold text-white mb-2">REPLACE IMAGES</h2>
+                  <p className="text-orange-200">Clear current studies and load only new ones</p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Error Message Modal */}
       {errorMessage && (
         <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

@@ -81,13 +81,13 @@ It follows a strict **zero-footprint** architecture: all DICOM parsing, image de
 ### Installation
 
 ```bash
-git clone [https://github.com/jaaniin/DICOM-Image-Viewer.git](https://github.com/jaaniin/DICOM-Image-Viewer.git)
+git clone https://github.com/jaaniin/DICOM-Image-Viewer.git
 cd DICOM-Image-Viewer
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open http://localhost:3000 in your browser.
 
 ### Building for Production
 
