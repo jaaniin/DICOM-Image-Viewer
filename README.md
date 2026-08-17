@@ -18,7 +18,7 @@ It follows a strict **zero-footprint** architecture: all DICOM parsing, image de
 - Series thumbnail list with quick study/series navigation and instant viewport assignment.
 
 ### 📐 Diagnostic & Measurement Tools
-- **Window Level / Window Center (WW/WC)**: Standard presets (Bone, Soft Tissue, Lung, Brain) + interactive drag adjustments.
+- **Window Level / Window Center (WW/WC)**: Interactive drag adjustments.
 - **Pan & Zoom**: Smooth translation and magnification.
 - **Length Measurement**: Calibrated distance in millimeters using DICOM Pixel Spacing.
 - **Angle Tool**: 3-point angle measurement in degrees.
@@ -43,7 +43,6 @@ It follows a strict **zero-footprint** architecture: all DICOM parsing, image de
 - **Medical Imaging**:
   - `cornerstone-core`
   - `cornerstone-wado-image-loader`
-  - `cornerstone-tools`
   - `dicom-parser`
 - **Concurrency**: Web Workers (`dicom.worker.ts`) for non-blocking asynchronous file parsing
 - **Styling & UI**: [Tailwind CSS](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
@@ -101,7 +100,7 @@ npm run start
 
 ## 📖 How to Use
 
-1. **Load Data**: Drag & drop a DICOM file or an entire folder of DICOM slices into the viewer window (or click **Upload DICOM**).
+1. **Load Data**: Drag & drop a DICOM file or an entire folder of DICOM slices into the viewer window (or click to select files).
 2. **Navigate Series**: The left sidebar organizes files into **Studies** and **Series**. Drag or select a series into any active viewport.
 3. **Select Tools**: Use the top toolbar to switch between **WW/WC**, **Pan**, **Zoom**, **Length**, **Angle**, **ROI**, or **Pixel Probe**.
 4. **Synchronize Views**: Select **Pixel Probe** and click on an anatomical feature in any viewport to auto-align other orthogonal views to that exact 3D point.
