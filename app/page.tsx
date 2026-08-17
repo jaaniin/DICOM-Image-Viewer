@@ -148,6 +148,7 @@ export default function App() {
   const [activeInfoViewport, setActiveInfoViewport] = useState<number | null>(null);
   const [copiedRawDataIndex, setCopiedRawDataIndex] = useState<number | null>(null);
   const lastMultiButtonInteraction = useRef<number>(0);
+  const isPointerDraggingRef = useRef<boolean>(false);
 
   const [measurements, setMeasurements] = useState<LengthMeasurement[]>([]);
   const [isTrashOpen, setIsTrashOpen] = useState(false);
@@ -156,6 +157,7 @@ export default function App() {
   const [draggingPoint, setDraggingPoint] = useState<{ id: string, point: string, isNew: boolean, lastPt?: any } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [patientMismatchDialog, setPatientMismatchDialog] = useState<{show: boolean, pendingInstances: DICOMInstance[]}>({show: false, pendingInstances: []});
+  const [showRemoveAllDialog, setShowRemoveAllDialog] = useState(false);
   const mousePosRef = useRef<{x: number, y: number} | null>(null);
   const cursor3DRef = useRef<{ point: number[], sourceViewportIndex: number, studyInstanceUID?: string } | null>(null);
   const [cursor3DActive, setCursor3DActive] = useState(false); // To trigger renders
@@ -306,7 +308,7 @@ export default function App() {
 
   const handleDoubleClick = (e: React.MouseEvent, index: number) => {
     if (e.button !== 0) return; // Double-click only with the left mouse button
-    if (window.performance.now() - lastMultiButtonInteraction.current < 500) return; // Prevent accidental clicks after zooming
+    if (window.performance.now() - lastMultiButtonInteraction.current < 150) return; // Prevent accidental clicks after zooming
     if (layout === 1) return;
     setMaximizedIndex(prev => prev === index ? null : index);
   };
@@ -409,7 +411,13 @@ export default function App() {
       let angleDiff = Math.abs(a1 - a2) * (180 / Math.PI);
       if (angleDiff > 180) angleDiff = 360 - angleDiff;
       
-      return `${label}: ${angleDiff.toFixed(1)}°`;
+      let angleStr = `${angleDiff.toFixed(1)}°`;
+      if (angleDiff > 90) {
+        const comp = 180 - angleDiff;
+        angleStr = `${angleDiff.toFixed(1)}° / ${comp.toFixed(1)}°`;
+      }
+      
+      return `${label}: ${angleStr}`;
     }
 
     const dx = m.end.x - m.start.x;
@@ -1295,6 +1303,11 @@ export default function App() {
       }
     }
 
+    if (action && (e.movementX !== 0 || e.movementY !== 0)) {
+       lastMultiButtonInteraction.current = window.performance.now();
+       isPointerDraggingRef.current = true;
+    }
+
     if (action === 'wwc') {
       const multiplier = Math.max(viewport.voi.windowWidth / 256, 1);
       viewport.voi.windowCenter += (e.movementY * multiplier);
@@ -1368,7 +1381,28 @@ export default function App() {
     } else if (action === 'drag_measurement' || action === 'length' || action === 'angle' || action === 'roi') {
       if (!draggingPoint) return;
       
-      const imagePt = cornerstone.pageToPixel(element, e.pageX, e.pageY) as any;
+      let imagePt = cornerstone.pageToPixel(element, e.pageX, e.pageY) as any;
+      
+      if (e.shiftKey) {
+        const m = measurements.find(m => m.id === draggingPoint.id);
+        if (m && (m.type === 'length' || m.type === 'angle')) {
+          let refPt = null;
+          if (draggingPoint.point === 'end') refPt = m.start;
+          else if (draggingPoint.point === 'start') refPt = m.end;
+          else if (draggingPoint.point === 'end2') refPt = m.start2;
+          else if (draggingPoint.point === 'start2') refPt = m.end2;
+          
+          if (refPt) {
+            const dx = Math.abs(imagePt.x - refPt.x);
+            const dy = Math.abs(imagePt.y - refPt.y);
+            if (dx > dy) {
+              imagePt.y = refPt.y;
+            } else {
+              imagePt.x = refPt.x;
+            }
+          }
+        }
+      }
       
       let hoverTrash = false;
       try {
@@ -1559,7 +1593,7 @@ export default function App() {
     const series = study?.series.find(s => s.seriesInstanceUID === vp.seriesInstanceUID);
     if (!series || series.instances.length <= 1) return;
 
-    const now = performance.now();
+    const now = window.performance.now();
     const timeSinceLastWheel = now - wheelTimeRef.current;
     wheelTimeRef.current = now;
 
@@ -2094,6 +2128,17 @@ export default function App() {
     }, 50);
   };
 
+  const handleRemoveAll = () => {
+    setStudies([]);
+    clearAllViewports();
+    setViewports(prev => prev.map(vp => ({ ...vp, seriesInstanceUID: null, studyInstanceUID: null, currentImageIndex: 0 })));
+    setLayout(1);
+    setMeasurements([]);
+    if (cursor3DRef.current) cursor3DRef.current = null;
+    setCursor3DActive(false);
+    setShowRemoveAllDialog(false);
+  };
+
   return (
     <div className="flex h-screen bg-neutral-950 text-neutral-300 font-sans overflow-hidden select-none">
       
@@ -2157,6 +2202,39 @@ export default function App() {
               <button
                 onClick={() => setPatientMismatchDialog({ show: false, pendingInstances: [] })}
                 className="w-full px-4 py-3 bg-transparent hover:bg-neutral-800 border border-neutral-700 text-neutral-300 font-medium rounded-lg transition-colors flex items-center justify-center mt-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove All Dialog Modal */}
+      {showRemoveAllDialog && (
+        <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+            <div className="p-5 border-b border-neutral-800 flex items-center gap-3 bg-neutral-900">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Remove All Studies</h2>
+              </div>
+            </div>
+            <div className="p-5 flex flex-col gap-3">
+              <p className="text-sm text-neutral-300 mb-2">
+                Are you sure you want to remove all loaded studies? This action cannot be undone.
+              </p>
+              <button
+                onClick={handleRemoveAll}
+                className="w-full px-4 py-3 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg shadow transition-colors flex items-center justify-center"
+              >
+                Clear All
+              </button>
+              <button
+                onClick={() => setShowRemoveAllDialog(false)}
+                className="w-full px-4 py-3 bg-transparent hover:bg-neutral-800 border border-neutral-700 text-neutral-300 font-medium rounded-lg transition-colors flex items-center justify-center mt-1"
               >
                 Cancel
               </button>
@@ -2443,16 +2521,20 @@ export default function App() {
                 key={index} 
                 onDoubleClick={(e) => handleDoubleClick(e, index)}
                 onMouseDown={(e) => {
+                  isPointerDraggingRef.current = false;
                   if (e.buttons > 1 || e.button !== 0) {
                     lastMultiButtonInteraction.current = window.performance.now();
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (e.button !== 0 || e.buttons > 0) {
+                  if (isPointerDraggingRef.current || e.button !== 0 || e.buttons > 0) {
                     lastMultiButtonInteraction.current = window.performance.now();
                   }
+                  if (e.buttons === 0) {
+                    isPointerDraggingRef.current = false;
+                  }
                 }}
-                className={`bg-neutral-900 border rounded-sm overflow-hidden flex flex-col ${dragOverViewport === index ? 'border-blue-500 ring-2 ring-blue-500/50' : 'border-neutral-800'} ${isMaximized ? 'absolute inset-1 z-20' : 'relative'} ${isHidden ? 'hidden' : ''}`}
+                className={`bg-neutral-900 border rounded-sm overflow-hidden flex flex-col ${dragOverViewport === index ? 'border-blue-500 ring-2 ring-blue-500/50' : 'border-neutral-800'} ${isMaximized ? 'absolute inset-1 z-20' : 'relative'} ${isHidden ? 'opacity-0 pointer-events-none' : ''}`}
                 onWheel={(e) => handleWheel(e, index)}
                 onDragOver={(e) => {
                   if (e.dataTransfer.types.includes('application/x-dicom-series')) {
@@ -2832,9 +2914,21 @@ Number of Echos: ${activeInstance.metadata.echoNumbers || 'Unknown'}`}
               </div>
               
               <div className="mt-4 flex-1 flex flex-col min-h-0">
-                <h4 className="text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2 shrink-0">
-                  Loaded Studies
-                </h4>
+                <div className="flex items-center justify-between mb-2 shrink-0">
+                  <h4 className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    Loaded Studies
+                  </h4>
+                  {studies.length > 0 && (
+                    <button
+                      onClick={() => setShowRemoveAllDialog(true)}
+                      className="text-xs text-neutral-500 hover:text-red-400 transition-colors px-2 py-0.5 rounded flex items-center gap-1 hover:bg-neutral-800"
+                      title="Remove all loaded studies"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Clear
+                    </button>
+                  )}
+                </div>
                 {studies.length === 0 ? (
                   <div className="text-xs text-neutral-600 italic text-center p-4 bg-neutral-950 rounded-md border border-neutral-800/50">
                     No studies loaded yet.
