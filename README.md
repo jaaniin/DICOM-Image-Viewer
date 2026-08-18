@@ -1,4 +1,4 @@
-# div.DICOM | Zero-Footprint Viewer
+# < div🔵DICOM /> | Zero-Footprint Viewer
 
 A modern, high-performance, web-based DICOM medical image viewer built with **Next.js (App Router)**, **TypeScript**, **Cornerstone.js**, and **Tailwind CSS**.
 
